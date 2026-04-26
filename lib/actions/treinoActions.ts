@@ -1,9 +1,9 @@
 "use server";
 
 import { neon } from "@neondatabase/serverless";
+import { getSessionUser } from "./authActions";
 
 const dbUrl = process.env.NEON_DATABASE;
-const MOCK_USER_ID = "00000000-0000-0000-0000-000000000000";
 
 function getSql() {
   if (!dbUrl) throw new Error("NEON_DATABASE is not set.");
@@ -36,11 +36,12 @@ export async function createExercise(name: string, muscle_group: string) {
 
 export async function getPrograms() {
   const sql = getSql();
+  const userId = await getSessionUser();
   const rows = await sql`
     SELECT p.id, p.name, p.focus, p.is_active, COUNT(s.id) as sessions_count
     FROM training_programs p
     LEFT JOIN training_sessions s ON s.program_id = p.id
-    WHERE p.user_id = ${MOCK_USER_ID}
+    WHERE p.user_id = ${userId}
     GROUP BY p.id
     ORDER BY p.created_at DESC
   `;
@@ -49,25 +50,28 @@ export async function getPrograms() {
 
 export async function toggleProgramActive(programId: number, isActive: boolean) {
   const sql = getSql();
+  const userId = await getSessionUser();
   if (isActive) {
-    await sql`UPDATE training_programs SET is_active = FALSE WHERE user_id = ${MOCK_USER_ID}`;
+    await sql`UPDATE training_programs SET is_active = FALSE WHERE user_id = ${userId}`;
   }
-  await sql`UPDATE training_programs SET is_active = ${isActive} WHERE id = ${programId} AND user_id = ${MOCK_USER_ID}`;
+  await sql`UPDATE training_programs SET is_active = ${isActive} WHERE id = ${programId} AND user_id = ${userId}`;
 }
 
 export async function deleteProgram(programId: number) {
   const sql = getSql();
+  const userId = await getSessionUser();
   await sql`DELETE FROM program_exercises WHERE session_id IN (SELECT id FROM training_sessions WHERE program_id = ${programId})`;
   await sql`DELETE FROM training_sessions WHERE program_id = ${programId}`;
-  await sql`DELETE FROM training_programs WHERE id = ${programId} AND user_id = ${MOCK_USER_ID}`;
+  await sql`DELETE FROM training_programs WHERE id = ${programId} AND user_id = ${userId}`;
 }
 
 export async function getActiveProgram() {
   const sql = getSql();
+  const userId = await getSessionUser();
   const programs = await sql`
     SELECT id, name, focus, current_session_index 
     FROM training_programs 
-    WHERE user_id = ${MOCK_USER_ID} AND is_active = TRUE 
+    WHERE user_id = ${userId} AND is_active = TRUE 
     LIMIT 1
   `;
   if (programs.length === 0) return null;
@@ -87,9 +91,10 @@ export async function getActiveProgram() {
 
 export async function getProgramById(programId: number) {
   const sql = getSql();
+  const userId = await getSessionUser();
   
   // Fetch Program
-  const pRows = await sql`SELECT id, name, focus, is_active FROM training_programs WHERE id = ${programId} AND user_id = ${MOCK_USER_ID}`;
+  const pRows = await sql`SELECT id, name, focus, is_active FROM training_programs WHERE id = ${programId} AND user_id = ${userId}`;
   if (pRows.length === 0) return null;
   const program = pRows[0];
 
@@ -120,9 +125,10 @@ export async function saveProgramDetails(
   sessions: { name: string; sequence_order: number; exercises: { catalog_id: number; sets: number; reps: number; sequence_order: number }[] }[]
 ) {
   const sql = getSql();
+  const userId = await getSessionUser();
 
   if (programData.is_active) {
-    await sql`UPDATE training_programs SET is_active = FALSE WHERE user_id = ${MOCK_USER_ID}`;
+    await sql`UPDATE training_programs SET is_active = FALSE WHERE user_id = ${userId}`;
   }
 
   let finalProgramId = programData.id;
@@ -132,7 +138,7 @@ export async function saveProgramDetails(
     await sql`
       UPDATE training_programs 
       SET name = ${programData.name}, focus = ${programData.focus}, is_active = ${programData.is_active}
-      WHERE id = ${finalProgramId} AND user_id = ${MOCK_USER_ID}
+      WHERE id = ${finalProgramId} AND user_id = ${userId}
     `;
     // Clean old sessions to replace them safely
     await sql`DELETE FROM program_exercises WHERE session_id IN (SELECT id FROM training_sessions WHERE program_id = ${finalProgramId})`;
@@ -141,7 +147,7 @@ export async function saveProgramDetails(
     // Insert new Program
     const pRows = await sql`
       INSERT INTO training_programs (user_id, name, focus, is_active) 
-      VALUES (${MOCK_USER_ID}, ${programData.name}, ${programData.focus}, ${programData.is_active})
+      VALUES (${userId}, ${programData.name}, ${programData.focus}, ${programData.is_active})
       RETURNING id
     `;
     finalProgramId = pRows[0].id;
@@ -192,33 +198,47 @@ export async function getSessionDetails(sessionId: number) {
 export async function saveWorkoutLog(
   programId: number, 
   sessionId: number, 
-  exercisesHistory: { program_exercise_id: number, catalog_id: number, sets: { reps: number, weight: number }[] }[]
+  exercisesHistory: { program_exercise_id: number, catalog_id: number, sets: { reps: number, weight: number }[] }[],
+  partnerHistory?: { program_exercise_id: number, catalog_id: number, sets: { reps: number, weight: number }[] }[]
 ) {
   const sql = getSql();
+  const userId = await getSessionUser();
   
-  // 1. Create Workout Log (Calculating total volume roughly here first, or we rely on DB generated)
-  let totalVolume = 0;
-  exercisesHistory.forEach(ex => ex.sets.forEach(set => totalVolume += (set.reps * set.weight)));
+  // Helper to save a single workout
+  const saveForUser = async (targetUserId: string, history: typeof exercisesHistory) => {
+    let totalVolume = 0;
+    history.forEach(ex => ex.sets.forEach(set => totalVolume += (set.reps * set.weight)));
 
-  const logs = await sql`
-    INSERT INTO workout_logs (user_id, program_id, session_id, total_volume_load)
-    VALUES (${MOCK_USER_ID}, ${programId}, ${sessionId}, ${totalVolume})
-    RETURNING id
-  `;
-  const workoutLogId = logs[0].id;
+    const logs = await sql`
+      INSERT INTO workout_logs (user_id, program_id, session_id, total_volume_load)
+      VALUES (${targetUserId}, ${programId}, ${sessionId}, ${totalVolume})
+      RETURNING id
+    `;
+    const workoutLogId = logs[0].id;
 
-  // 2. Insert Sets History
-  for (const ex of exercisesHistory) {
-    for (let i = 0; i < ex.sets.length; i++) {
-        const s = ex.sets[i];
-        if (s.reps > 0) {
-            await sql`
-              INSERT INTO workout_exercise_logs 
-              (workout_log_id, program_exercise_id, exercise_catalog_id, set_number, actual_reps, actual_weight)
-              VALUES (${workoutLogId}, ${ex.program_exercise_id}, ${ex.catalog_id}, ${i + 1}, ${s.reps}, ${s.weight})
-            `;
-        }
+    for (const ex of history) {
+      for (let i = 0; i < ex.sets.length; i++) {
+          const s = ex.sets[i];
+          if (s.reps > 0) {
+              await sql`
+                INSERT INTO workout_exercise_logs 
+                (user_id, workout_log_id, program_exercise_id, exercise_catalog_id, set_number, actual_reps, actual_weight)
+                VALUES (${targetUserId}, ${workoutLogId}, ${ex.program_exercise_id}, ${ex.catalog_id}, ${i + 1}, ${s.reps}, ${s.weight})
+              `;
+          }
+      }
     }
+  };
+
+  // Save for main user
+  await saveForUser(userId, exercisesHistory);
+
+  // If partner history provided, find partner user_id (using a simple logic or mock partner login)
+  if (partnerHistory && partnerHistory.length > 0) {
+     const partnerRes = await sql`SELECT id FROM users WHERE email = 'parceiro@teste.com' LIMIT 1`;
+     if (partnerRes.length > 0) {
+        await saveForUser(partnerRes[0].id, partnerHistory);
+     }
   }
 
   // 3. Increment current session sequence in the program to cycle to the next day
@@ -240,17 +260,13 @@ export async function saveWorkoutLog(
 
 export async function getDashboardVolumeData(period: "month" | "year") {
   const sql = getSql();
-  
-  // Month: weekly aggregate / Year: monthly aggregate
-  // This is a simplified dynamic pivot mockup in SQL.
-  // In a real sophisticated query, we'd use `date_trunc` and group by the current timeframe.
-  // For the sake of UI stability, returning direct total overall from recent queries.
+  const userId = await getSessionUser();
   
   const history = await sql`
     SELECT w.completed_at, w.total_volume_load, s.name as session_name
     FROM workout_logs w
     LEFT JOIN training_sessions s ON w.session_id = s.id
-    WHERE w.user_id = ${MOCK_USER_ID}
+    WHERE w.user_id = ${userId}
     ORDER BY w.completed_at ASC
   `;
   
@@ -278,12 +294,13 @@ export async function getExerciseAnalysis(catalogId: number) {
 
 export async function getTreinosAnalysis(period: "mensal" | "anual") {
   const sql = getSql();
+  const userId = await getSessionUser();
   const daysLimit = period === "mensal" ? 30 : 365;
 
   const logs = await sql`
      SELECT completed_at::date as date_completed, SUM(total_volume_load) as volume
      FROM workout_logs
-     WHERE user_id = ${MOCK_USER_ID} AND completed_at >= NOW() - (${daysLimit} * INTERVAL '1 day')
+     WHERE user_id = ${userId} AND completed_at >= NOW() - (${daysLimit} * INTERVAL '1 day')
      GROUP BY completed_at::date
      ORDER BY completed_at::date ASC
   `;

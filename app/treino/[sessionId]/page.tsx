@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { ChevronLeft, ChevronRight, Check, Play, Square, RotateCcw, X, Home, CheckSquare, Dumbbell } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getSessionDetails, saveWorkoutLog } from "@/lib/actions/treinoActions";
 
 // --- Mock Data ---
@@ -12,6 +12,8 @@ interface ExerciseSet {
   name: string;
   reps: number;
   weight: number;
+  partner_reps?: number;
+  partner_weight?: number;
   completed: boolean;
 }
 
@@ -22,11 +24,12 @@ interface Exercise {
   sets: ExerciseSet[];
 }
 
-
-
-export default function ExerciseExecutionPage() {
+function ExerciseExecutionContent() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
+  const isDuo = searchParams?.get("duo") === "true";
+
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [sessionData, setSessionData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -48,6 +51,8 @@ export default function ExerciseExecutionPage() {
                 name: `${i + 1}ª Série`,
                 reps: ex.target_reps,
                 weight: 0,
+                partner_reps: ex.target_reps,
+                partner_weight: 0,
                 completed: false,
               });
             }
@@ -79,6 +84,9 @@ export default function ExerciseExecutionPage() {
   const [selectedSet, setSelectedSet] = useState<{ exerciseIndex: number; setIndex: number } | null>(null);
   const [confirmReps, setConfirmReps] = useState<number | string>("");
   const [confirmWeight, setConfirmWeight] = useState<number | string>("");
+  
+  const [confirmReps2, setConfirmReps2] = useState<number | string>("");
+  const [confirmWeight2, setConfirmWeight2] = useState<number | string>("");
 
   // Modal State for Finalizing Session
   const [showFinishSession, setShowFinishSession] = useState(false);
@@ -119,6 +127,9 @@ export default function ExerciseExecutionPage() {
     
     setConfirmReps(setToComplete.reps);
     setConfirmWeight(setToComplete.weight);
+    setConfirmReps2(setToComplete.partner_reps || setToComplete.reps);
+    setConfirmWeight2(setToComplete.partner_weight || setToComplete.weight);
+
     setSelectedSet({ exerciseIndex, setIndex });
   };
 
@@ -131,6 +142,8 @@ export default function ExerciseExecutionPage() {
       completed: true,
       reps: Number(confirmReps),
       weight: Number(confirmWeight),
+      partner_reps: isDuo ? Number(confirmReps2) : undefined,
+      partner_weight: isDuo ? Number(confirmWeight2) : undefined,
     };
     setExercises(newExercises);
     setSelectedSet(null);
@@ -150,9 +163,15 @@ export default function ExerciseExecutionPage() {
         sets: ex.sets.map(s => ({ reps: s.reps, weight: s.weight }))
       }));
 
-      await saveWorkoutLog(sessionData.program_id, sessionData.id, formattedHistory);
+      const partnerHistory = isDuo ? exercises.map(ex => ({
+        program_exercise_id: Number(ex.id),
+        catalog_id: ex.catalog_id || 0,
+        sets: ex.sets.map(s => ({ reps: s.partner_reps || 0, weight: s.partner_weight || 0 }))
+      })) : undefined;
+
+      await saveWorkoutLog(sessionData.program_id, sessionData.id, formattedHistory, partnerHistory);
       setShowFinishSession(false);
-      router.push("/treino");
+      router.push("/");
     } catch(err) {
       console.error(err);
       setIsFinishing(false);
@@ -187,12 +206,13 @@ export default function ExerciseExecutionPage() {
       </div>
 
       {/* Current Exercise Title */}
-      <div className="bg-zinc-900 py-4 text-center shadow-sm border-b border-emerald-500/20 px-4 min-h-[64px] flex items-center justify-center">
+      <div className="bg-zinc-900 py-4 text-center shadow-sm border-b border-emerald-500/20 px-4 min-h-[64px] flex items-center justify-center relative">
         {loading ? (
            <span className="text-zinc-500 animate-pulse text-sm">Carregando série...</span>
         ) : (
           <h2 className="text-xl font-bold tracking-tight text-white uppercase mt-1">
             {currentExercise?.name || "Sem título"}
+            {isDuo && <span className="ml-2 text-xs bg-emerald-600 px-2 py-1 rounded-full text-white align-middle">DUO</span>}
           </h2>
         )}
       </div>
@@ -215,9 +235,18 @@ export default function ExerciseExecutionPage() {
               <span className={`text-sm font-bold ${setInfo.completed ? 'text-emerald-500' : 'text-zinc-200'}`}>
                 {setInfo.name}
               </span>
-              <span className="text-lg font-medium text-zinc-400 mt-1 flex items-baseline">
-                {setInfo.reps} <span className="text-xs mx-1 text-zinc-600">x</span> {setInfo.weight}kg
-              </span>
+              <div className="flex flex-col mt-1 gap-1">
+                <span className="text-lg font-medium text-zinc-400 flex items-baseline">
+                   {isDuo && <span className="text-xs text-zinc-500 w-12 inline-block">Você:</span>}
+                   {setInfo.reps} <span className="text-xs mx-1 text-zinc-600">x</span> {setInfo.weight}kg
+                </span>
+                {isDuo && (
+                  <span className="text-lg font-medium text-emerald-400/80 flex items-baseline">
+                     <span className="text-xs text-emerald-500/50 w-12 inline-block">Parça:</span>
+                     {setInfo.partner_reps} <span className="text-xs mx-1 text-emerald-600/50">x</span> {setInfo.partner_weight}kg
+                  </span>
+                )}
+              </div>
             </div>
             
             <button
@@ -242,7 +271,7 @@ export default function ExerciseExecutionPage() {
         
         {/* Left Actions (Home & Confirm Combo) */}
         <div className="flex flex-col gap-2 justify-between">
-          <Link href="/treino" className="flex items-center justify-center w-8 h-14 bg-zinc-900 rounded-2xl hover:bg-zinc-800 transition shadow-sm border border-zinc-800 active:scale-95 text-zinc-400">
+          <Link href="/" className="flex items-center justify-center w-8 h-14 bg-zinc-900 rounded-2xl hover:bg-zinc-800 transition shadow-sm border border-zinc-800 active:scale-95 text-zinc-400">
             <Home className="w-6 h-6" />
           </Link>
           <button 
@@ -292,10 +321,10 @@ export default function ExerciseExecutionPage() {
       {/* Confirmation Modal for Individual Set */}
       {selectedSet !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-zinc-900 w-full max-w-sm rounded-[2rem] p-6 shadow-2xl relative animate-in zoom-in-95 duration-200 border border-zinc-800">
+          <div className="bg-zinc-900 w-full max-w-md rounded-[2rem] p-6 shadow-2xl relative animate-in zoom-in-95 duration-200 border border-zinc-800 overflow-y-auto max-h-[90vh]">
             <button 
               onClick={() => setSelectedSet(null)}
-              className="absolute top-4 right-4 p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-full transition"
+              className="absolute top-4 right-4 p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-full transition z-10"
             >
               <X className="w-5 h-5" />
             </button>
@@ -304,30 +333,67 @@ export default function ExerciseExecutionPage() {
               Confirmar Série
             </h3>
             
-            <div className="flex space-x-4 mb-8">
-              <div className="flex-1 flex flex-col items-center">
-                <label className="text-xs font-bold uppercase text-zinc-500 mb-2">Repetições</label>
-                <input 
-                  type="number"
-                  value={confirmReps}
-                  onChange={(e) => setConfirmReps(e.target.value)}
-                  className="w-full text-center text-3xl font-bold py-3 bg-zinc-950 text-white rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 outline-none"
-                  inputMode="numeric"
-                />
+            <div className="flex flex-col space-y-4 mb-8">
+              
+              <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800 shadow-inner">
+                 <h4 className="text-zinc-400 text-xs font-bold uppercase mb-4 text-center">Atleta 1 (Você)</h4>
+                 <div className="flex space-x-4">
+                    <div className="flex-1 flex flex-col items-center">
+                      <label className="text-[10px] font-bold uppercase text-zinc-500 mb-2">Repetições</label>
+                      <input 
+                        type="number"
+                        value={confirmReps}
+                        onChange={(e) => setConfirmReps(e.target.value)}
+                        className="w-full text-center text-2xl font-bold py-2 bg-zinc-900 text-white rounded-xl border-none focus:ring-2 focus:ring-emerald-500 outline-none"
+                        inputMode="numeric"
+                      />
+                    </div>
+                    <div className="flex flex-col justify-center pt-6">
+                      <X className="w-3 h-3 text-zinc-600" />
+                    </div>
+                    <div className="flex-1 flex flex-col items-center">
+                      <label className="text-[10px] font-bold uppercase text-zinc-500 mb-2">Carga (kg)</label>
+                      <input 
+                        type="number"
+                        value={confirmWeight}
+                        onChange={(e) => setConfirmWeight(e.target.value)}
+                        className="w-full text-center text-2xl font-bold py-2 bg-zinc-900 text-white rounded-xl border-none focus:ring-2 focus:ring-emerald-500 outline-none"
+                        inputMode="numeric"
+                      />
+                    </div>
+                 </div>
               </div>
-              <div className="flex flex-col justify-center pt-6">
-                <X className="w-4 h-4 text-zinc-600" />
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <label className="text-xs font-bold uppercase text-zinc-500 mb-2">Carga (kg)</label>
-                <input 
-                  type="number"
-                  value={confirmWeight}
-                  onChange={(e) => setConfirmWeight(e.target.value)}
-                  className="w-full text-center text-3xl font-bold py-3 bg-zinc-950 text-white rounded-2xl border-none focus:ring-2 focus:ring-emerald-500 outline-none"
-                  inputMode="numeric"
-                />
-              </div>
+
+              {isDuo && (
+                <div className="bg-zinc-950 p-4 rounded-2xl border border-emerald-900/50 shadow-inner">
+                   <h4 className="text-emerald-400/80 text-xs font-bold uppercase mb-4 text-center">Atleta 2 (Parceiro)</h4>
+                   <div className="flex space-x-4">
+                      <div className="flex-1 flex flex-col items-center">
+                        <label className="text-[10px] font-bold uppercase text-emerald-500/50 mb-2">Repetições</label>
+                        <input 
+                          type="number"
+                          value={confirmReps2}
+                          onChange={(e) => setConfirmReps2(e.target.value)}
+                          className="w-full text-center text-2xl font-bold py-2 bg-zinc-900 text-emerald-100 rounded-xl border-none focus:ring-2 focus:ring-emerald-600 outline-none"
+                          inputMode="numeric"
+                        />
+                      </div>
+                      <div className="flex flex-col justify-center pt-6">
+                        <X className="w-3 h-3 text-emerald-900" />
+                      </div>
+                      <div className="flex-1 flex flex-col items-center">
+                        <label className="text-[10px] font-bold uppercase text-emerald-500/50 mb-2">Carga (kg)</label>
+                        <input 
+                          type="number"
+                          value={confirmWeight2}
+                          onChange={(e) => setConfirmWeight2(e.target.value)}
+                          className="w-full text-center text-2xl font-bold py-2 bg-zinc-900 text-emerald-100 rounded-xl border-none focus:ring-2 focus:ring-emerald-600 outline-none"
+                          inputMode="numeric"
+                        />
+                      </div>
+                   </div>
+                </div>
+              )}
             </div>
             
             <button
@@ -376,4 +442,12 @@ export default function ExerciseExecutionPage() {
       )}
     </div>
   );
+}
+
+export default function ExerciseExecutionPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-emerald-500 animate-pulse">Carregando Treino...</div>}>
+      <ExerciseExecutionContent />
+    </Suspense>
+  )
 }

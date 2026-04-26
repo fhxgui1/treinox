@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { ChevronRight, Dumbbell, Calendar, TrendingUp, Menu, X, BarChart2, Settings, Plus } from "lucide-react";
+import { ChevronRight, Dumbbell, Calendar, TrendingUp, Menu, X, BarChart2, Settings, Plus, Users } from "lucide-react";
 import Link from "next/link";
 import { getActiveProgram, getDashboardVolumeData } from "@/lib/actions/treinoActions";
 
@@ -78,20 +78,25 @@ export default function TreinoDashboard() {
             </div>
           </Link>
         ) : (
-          <Link href={`/treino/${nextSession?.id || 0}`} className="block">
-            <div className="bg-gradient-to-br from-emerald-600 to-emerald-900 rounded-2xl p-5 shadow-lg shadow-emerald-900/50 text-white transform transition active:scale-[0.98]">
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center space-x-2 bg-black/20 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider backdrop-blur-md">
-                  <Dumbbell className="w-3 h-3 text-emerald-300" />
-                  <span className="text-emerald-50">Próximo Treino</span>
+          <div className="relative">
+            <Link href={`/treino/${nextSession?.id || 0}`} className="block">
+              <div className="bg-gradient-to-br from-emerald-600 to-emerald-900 rounded-2xl p-5 shadow-lg shadow-emerald-900/50 text-white transform transition active:scale-[0.98]">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center space-x-2 bg-black/20 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider backdrop-blur-md">
+                    <Dumbbell className="w-3 h-3 text-emerald-300" />
+                    <span className="text-emerald-50">Próximo Treino</span>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-emerald-200" />
                 </div>
-                <ChevronRight className="w-5 h-5 text-emerald-200" />
+                
+                <h2 className="text-3xl font-extrabold mb-1">{nextSession?.name || "Treino"}</h2>
+                <p className="text-emerald-200 font-medium">{activeProg.name} • {activeProg.focus}</p>
               </div>
-              
-              <h2 className="text-3xl font-extrabold mb-1">{nextSession?.name || "Treino"}</h2>
-              <p className="text-emerald-200 font-medium">{activeProg.name} • {activeProg.focus}</p>
-            </div>
-          </Link>
+            </Link>
+            <Link href={`/treino/${nextSession?.id || 0}?duo=true`} title="Treino em Dupla" className="absolute right-4 bottom-4 p-3 bg-emerald-700/80 hover:bg-emerald-600 backdrop-blur-sm shadow-xl rounded-full transition active:scale-95 border border-emerald-500/30">
+              <Users className="w-5 h-5 text-emerald-50" />
+            </Link>
+          </div>
         )}
       </div>
 
