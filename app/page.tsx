@@ -5,12 +5,14 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { ChevronRight, Dumbbell, Calendar, TrendingUp, Menu, X, BarChart2, Settings, Plus, Users } from "lucide-react";
 import Link from "next/link";
 import { getActiveProgram, getDashboardVolumeData } from "@/lib/actions/treinoActions";
+import PartnerManager from "@/components/PartnerManager";
 
 // --- Dynamic Data Handled Below ---
 
 export default function TreinoDashboard() {
   const [timeView, setTimeView] = useState<"month" | "year">("month");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [activePartnerId, setActivePartnerId] = useState<string>("");
   const [activeProg, setActiveProg] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState<any[]>([]);
@@ -93,8 +95,23 @@ export default function TreinoDashboard() {
                 <p className="text-emerald-200 font-medium">{activeProg.name} • {activeProg.focus}</p>
               </div>
             </Link>
-            <Link href={`/treino/${nextSession?.id || 0}?duo=true`} title="Treino em Dupla" className="absolute right-4 bottom-4 p-3 bg-emerald-700/80 hover:bg-emerald-600 backdrop-blur-sm shadow-xl rounded-full transition active:scale-95 border border-emerald-500/30">
-              <Users className="w-5 h-5 text-emerald-50" />
+            <Link 
+              href={activePartnerId ? `/treino/${nextSession?.id || 0}?duo=true&partnerId=${activePartnerId}` : "#"} 
+              onClick={(e) => {
+                if(!activePartnerId) {
+                  e.preventDefault();
+                  setIsSidebarOpen(true);
+                  alert("Adicione e selecione um parceiro no Menu primeiro para treinar em dupla!");
+                }
+              }}
+              title="Treino em Dupla" 
+              className={`absolute right-4 bottom-4 p-3 backdrop-blur-sm shadow-xl rounded-full transition active:scale-95 border ${
+                activePartnerId 
+                  ? "bg-emerald-700/80 hover:bg-emerald-600 border-emerald-500/30" 
+                  : "bg-zinc-800/80 hover:bg-zinc-700 border-zinc-700/50"
+              }`}
+            >
+              <Users className={`w-5 h-5 ${activePartnerId ? "text-emerald-50" : "text-zinc-500"}`} />
             </Link>
           </div>
         )}
@@ -251,6 +268,8 @@ export default function TreinoDashboard() {
                 </div>
                 <span className="font-semibold">Cadastros</span>
               </Link>
+
+              <PartnerManager selectedPartnerId={activePartnerId} onSelectPartner={setActivePartnerId} />
             </div>
           </div>
         </div>

@@ -199,6 +199,7 @@ export async function saveWorkoutLog(
   programId: number, 
   sessionId: number, 
   exercisesHistory: { program_exercise_id: number, catalog_id: number, sets: { reps: number, weight: number }[] }[],
+  partnerId?: string,
   partnerHistory?: { program_exercise_id: number, catalog_id: number, sets: { reps: number, weight: number }[] }[]
 ) {
   const sql = getSql();
@@ -233,12 +234,9 @@ export async function saveWorkoutLog(
   // Save for main user
   await saveForUser(userId, exercisesHistory);
 
-  // If partner history provided, find partner user_id (using a simple logic or mock partner login)
-  if (partnerHistory && partnerHistory.length > 0) {
-     const partnerRes = await sql`SELECT id FROM users WHERE email = 'parceiro@teste.com' LIMIT 1`;
-     if (partnerRes.length > 0) {
-        await saveForUser(partnerRes[0].id, partnerHistory);
-     }
+  // If partner history provided, save for partner
+  if (partnerId && partnerHistory && partnerHistory.length > 0) {
+     await saveForUser(partnerId, partnerHistory);
   }
 
   // 3. Increment current session sequence in the program to cycle to the next day

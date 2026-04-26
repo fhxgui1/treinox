@@ -29,6 +29,8 @@ function ExerciseExecutionContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const isDuo = searchParams?.get("duo") === "true";
+  const partnerIdStr = searchParams?.get("partnerId");
+  const partnerId = partnerIdStr && partnerIdStr !== "null" ? partnerIdStr : undefined;
 
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [sessionData, setSessionData] = useState<any>(null);
@@ -169,7 +171,7 @@ function ExerciseExecutionContent() {
         sets: ex.sets.map(s => ({ reps: s.partner_reps || 0, weight: s.partner_weight || 0 }))
       })) : undefined;
 
-      await saveWorkoutLog(sessionData.program_id, sessionData.id, formattedHistory, partnerHistory);
+      await saveWorkoutLog(sessionData.program_id, sessionData.id, formattedHistory, partnerId, partnerHistory);
       setShowFinishSession(false);
       router.push("/");
     } catch(err) {
