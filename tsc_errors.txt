@@ -1,0 +1,19 @@
+﻿
+> treinox@0.0.1 typecheck
+> tsc --noEmit
+
+app/[sessionId]/page.tsx(7,51): error TS2307: Cannot find module '@/lib/actions/treinoActions' or its corresponding type declarations.
+app/administrar/[programId]/page.tsx(8,88): error TS2307: Cannot find module '@/lib/actions/treinoActions' or its corresponding type declarations.
+app/administrar/[programId]/page.tsx(43,32): error TS7006: Parameter 'exercises' implicitly has an 'any' type.
+app/administrar/[programId]/page.tsx(48,47): error TS7006: Parameter 'rawData' implicitly has an 'any' type.
+app/administrar/page.tsx(6,65): error TS2307: Cannot find module '@/lib/actions/treinoActions' or its corresponding type declarations.
+app/analise-treinos/page.tsx(6,92): error TS2307: Cannot find module 'recharts' or its corresponding type declarations.
+app/analise-treinos/page.tsx(7,36): error TS2307: Cannot find module '@/lib/actions/treinoActions' or its corresponding type declarations.
+app/analise-treinos/page.tsx(132,35): error TS7006: Parameter 'val' implicitly has an 'any' type.
+app/analise/page.tsx(7,36): error TS2307: Cannot find module '@/lib/actions/treinoActions' or its corresponding type declarations.
+app/cadastros/page.tsx(6,32): error TS2307: Cannot find module '@/lib/actions/treinoActions' or its corresponding type declarations.
+app/exercicio/[exerciseId]/page.tsx(4,107): error TS2307: Cannot find module 'recharts' or its corresponding type declarations.
+app/exercicio/[exerciseId]/page.tsx(8,37): error TS2307: Cannot find module '@/lib/actions/treinoActions' or its corresponding type declarations.
+app/page.tsx(4,100): error TS2307: Cannot find module 'recharts' or its corresponding type declarations.
+app/page.tsx(7,58): error TS2307: Cannot find module '@/lib/actions/treinoActions' or its corresponding type declarations.
+app/page.tsx(160,35): error TS7006: Parameter 'value' implicitly has an 'any' type.
